@@ -323,23 +323,28 @@ class TrueSkill(object):
                trunc_layer:   O   O   (TruncateFactor)
 
         """
+
         flatten_ratings = sum(map(tuple, rating_groups), ())
         flatten_weights = sum(map(tuple, weights), ())
         size = len(flatten_ratings)
         group_size = len(rating_groups)
+
         # create variables
         rating_vars = [Variable() for x in range(size)]
         perf_vars = [Variable() for x in range(size)]
         team_perf_vars = [Variable() for x in range(group_size)]
         team_diff_vars = [Variable() for x in range(group_size - 1)]
         team_sizes = _team_sizes(rating_groups)
+
         # layer builders
         def build_rating_layer():
             for rating_var, rating in zip(rating_vars, flatten_ratings):
                 yield PriorFactor(rating_var, rating, self.tau)
+
         def build_perf_layer():
             for rating_var, perf_var in zip(rating_vars, perf_vars):
                 yield LikelihoodFactor(rating_var, perf_var, self.beta ** 2)
+
         def build_team_perf_layer():
             for team, team_perf_var in enumerate(team_perf_vars):
                 if team > 0:
@@ -350,10 +355,12 @@ class TrueSkill(object):
                 child_perf_vars = perf_vars[start:end]
                 coeffs = flatten_weights[start:end]
                 yield SumFactor(team_perf_var, child_perf_vars, coeffs)
+
         def build_team_diff_layer():
             for team, team_diff_var in enumerate(team_diff_vars):
                 yield SumFactor(team_diff_var,
                                 team_perf_vars[team:team + 2], [+1, -1])
+
         def build_trunc_layer():
             for x, team_diff_var in enumerate(team_diff_vars):
                 if callable(self.draw_probability):
@@ -385,10 +392,12 @@ class TrueSkill(object):
         if min_delta <= 0:
             raise ValueError('min_delta must be greater than 0')
         layers = []
+
         def build(builders):
             layers_built = [list(build()) for build in builders]
             layers.extend(layers_built)
             return layers_built
+
         # gray arrows
         layers_built = build([build_rating_layer,
                               build_perf_layer,
@@ -396,6 +405,7 @@ class TrueSkill(object):
         rating_layer, perf_layer, team_perf_layer = layers_built
         for f in chain(*layers_built):
             f.down()
+
         # arrow #1, #2, #3
         team_diff_layer, trunc_layer = build([build_team_diff_layer,
                                               build_trunc_layer])
@@ -419,9 +429,11 @@ class TrueSkill(object):
             # repeat until to small update
             if delta <= min_delta:
                 break
+
         # up both ends
         team_diff_layer[0].up(0)
         team_diff_layer[team_diff_len - 1].up(1)
+
         # up the remainder of the black arrows
         for f in team_perf_layer:
             for x in range(len(f.vars) - 1):
@@ -474,28 +486,41 @@ class TrueSkill(object):
         .. versionadded:: 0.2
 
         """
+        # Checks whether rating_groups is consistent (i.e., it should contain more than
+        # groups and all groups must not be empty.
         rating_groups, keys = self.validate_rating_groups(rating_groups)
         weights = self.validate_weights(weights, rating_groups, keys)
+        #print "Rating_groups: {}".format(rating_groups)
+        #print "Weights: {}".format(weights)
+        #print "Ranks: {}".format(ranks)
+        # Number of teams.
         group_size = len(rating_groups)
+
         if ranks is None:
             ranks = range(group_size)
         elif len(ranks) != group_size:
             raise ValueError('Wrong ranks')
+
         # sort rating groups by rank
         by_rank = lambda x: x[1][1]
         sorting = sorted(enumerate(zip(rating_groups, ranks, weights)),
                          key=by_rank)
+
+        #print "Sorting_rating_groups: {}".format(sorting)
         sorted_rating_groups, sorted_ranks, sorted_weights = [], [], []
         for x, (g, r, w) in sorting:
             sorted_rating_groups.append(g)
             sorted_ranks.append(r)
             # make weights to be greater than 0
             sorted_weights.append(max(min_delta, w_) for w_ in w)
+
         # build factor graph
         args = (sorted_rating_groups, sorted_ranks, sorted_weights)
         builders = self.factor_graph_builders(*args)
+
         args = builders + (min_delta,)
         layers = self.run_schedule(*args)
+
         # make result
         rating_layer, team_sizes = layers[0], _team_sizes(sorted_rating_groups)
         transformed_groups = []

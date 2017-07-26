@@ -117,4 +117,5 @@ def trueskill_demo():
         print "Player #{}: mu={}, sigma={}".format(p, PLAYERS[p].mu, PLAYERS[p].sigma)
     plt.legend()
     plt.show()
+
 trueskill_demo()
