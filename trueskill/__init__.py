@@ -99,7 +99,7 @@ def _floating_point_error(env):
 
 
 class Rating(Gaussian):
-    """Represents a player's skill as Gaussian distrubution.
+    """Represents a player's skill as Gaussian distribution.
 
     The default mu and sigma value follows the global environment's settings.
     If you don't want to use the global, use :meth:`TrueSkill.create_rating` to
