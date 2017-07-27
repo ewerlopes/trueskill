@@ -118,4 +118,4 @@ def trueskill_demo():
     plt.legend()
     plt.show()
 
-trueskill_demo()
+#trueskill_demo()

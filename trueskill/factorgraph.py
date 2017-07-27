@@ -35,7 +35,8 @@ class Variable(Node, Gaussian):
 
     def set(self, val):
         delta = self.delta(val)
-        self.pi, self.tau = val.pi, val.tau
+        self.pi  = val.pi       # precision: 1/sigma^2
+        self.tau = val.tau      # precision adjusted mean: precision*mean.
         return delta
 
     def delta(self, other):
@@ -189,8 +190,30 @@ class TruncateFactor(Factor):
     def up(self):
         val = self.var
         msg = self.var[self]
+        print "Type of var: {}".format(msg)
         div = val / msg
         sqrt_pi = math.sqrt(div.pi)
+        args = (div.tau / sqrt_pi, self.draw_margin * sqrt_pi)
+        v = self.v_func(*args)
+        w = self.w_func(*args)
+        denom = (1. - w)
+        pi, tau = div.pi / denom, (div.tau + sqrt_pi * v) / denom
+        return val.update_value(self, pi, tau)
+
+
+class PoissonTruncateFactor(Factor):
+
+    def __init__(self, var, v_func, w_func, draw_margin):
+        super(PoissonTruncateFactor, self).__init__([var])
+        self.v_func = v_func
+        self.w_func = w_func
+        self.draw_margin = draw_margin
+
+    def up(self):
+        val = self.var
+        msg = self.var[self]
+        div = val / msg
+        sqrt_pi = math.sqrt(div.pi)                                 # this is sigma
         args = (div.tau / sqrt_pi, self.draw_margin * sqrt_pi)
         v = self.v_func(*args)
         w = self.w_func(*args)

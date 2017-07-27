@@ -394,6 +394,7 @@ class TrueSkill(object):
         layers = []
 
         def build(builders):
+            """Instantiate layers by using '()' the elements of builders."""
             layers_built = [list(build()) for build in builders]
             layers.extend(layers_built)
             return layers_built
@@ -403,6 +404,7 @@ class TrueSkill(object):
                               build_perf_layer,
                               build_team_perf_layer])
         rating_layer, perf_layer, team_perf_layer = layers_built
+
         for f in chain(*layers_built):
             f.down()
 
