@@ -409,10 +409,201 @@ class TrueSkill(object):
             f.down()
 
         # arrow #1, #2, #3
-        team_diff_layer, trunc_layer = build([build_team_diff_layer,
-                                              build_trunc_layer])
+        team_diff_layer, trunc_layer = build([build_team_diff_layer, build_trunc_layer])
         team_diff_len = len(team_diff_layer)
         for x in range(10):
+            #print "x: {}".format(x)
+            if team_diff_len == 1:
+                # only two teams
+                team_diff_layer[0].down()
+                delta = trunc_layer[0].up()
+            else:
+                # multiple teams
+                delta = 0
+                for x in range(team_diff_len - 1):
+                    team_diff_layer[x].down()
+                    delta = max(delta, trunc_layer[x].up())
+                    team_diff_layer[x].up(1)  # up to right variable
+                for x in range(team_diff_len - 1, 0, -1):
+                    team_diff_layer[x].down()
+                    delta = max(delta, trunc_layer[x].up())
+                    team_diff_layer[x].up(0)  # up to left variable
+            # repeat until to small update
+            if delta <= min_delta:
+                break
+
+        # up both ends
+        team_diff_layer[0].up(0)
+        team_diff_layer[team_diff_len - 1].up(1)
+
+        # up the remainder of the black arrows
+        for f in team_perf_layer:
+            for x in range(len(f.vars) - 1):
+                f.up(x)
+        for f in perf_layer:
+            f.up()
+        return layers
+
+
+    def factor_extension_graph_builders(self, rating_groups, effort_rating_groups, ranks, effort_ranks, weights):
+        """Makes nodes for the TrueSkill factor graph.
+
+        Here's an example of a TrueSkill factor graph when 1 vs 2 vs 1 match::
+
+                skill estimation        effort estimation
+
+              rating_layer:  O  O      O  O  (PriorFactor)
+                             |  |      |  |
+                             |  |      |  |
+                perf_layer:  O  O      O  O  (LikelihoodFactor)
+                             |  |      |  |
+                             |  |      |  |
+           team_perf_layer:  O  O      O  O  (SumFactor)
+                             \ /       \ /
+                              |         |
+           team_diff_layer:   O ------- O    (SumFactor)
+                              |         |
+                              |         |
+               trunc_layer:   O         O    (TruncateFactor)
+
+        """
+
+        flatten_ratings = sum(map(tuple, rating_groups), ())
+        effort_flatten_ratings = sum(map(tuple, effort_rating_groups), ())
+        flatten_weights = sum(map(tuple, weights), ())
+        size = len(flatten_ratings)
+        group_size = len(rating_groups)
+
+        # create variables
+        rating_vars = [Variable() for x in range(size)]
+        perf_vars = [Variable() for x in range(size)]
+        team_perf_vars = [Variable() for x in range(group_size)]
+        team_diff_vars = [Variable() for x in range(group_size - 1)]
+        team_sizes = _team_sizes(rating_groups)
+
+        # create variables for effort estimation
+        effort_rating_vars    = [Variable() for x in range(size)]
+        effort_perf_vars      = [Variable() for x in range(size)]
+        effort_team_perf_vars = [Variable() for x in range(group_size)]
+        effort_team_diff_vars = [Variable() for x in range(group_size - 1)]
+
+        # layer builders for skill estimator
+        def build_rating_layer():
+            for rating_var, rating in zip(rating_vars, flatten_ratings):
+                yield PriorFactor(rating_var, rating, self.tau)
+
+        def build_perf_layer():
+            for rating_var, perf_var in zip(rating_vars, perf_vars):
+                yield LikelihoodFactor(rating_var, perf_var, self.beta ** 2)
+
+        def build_team_perf_layer():
+            for team, team_perf_var in enumerate(team_perf_vars):
+                if team > 0:
+                    start = team_sizes[team - 1]
+                else:
+                    start = 0
+                end = team_sizes[team]
+                child_perf_vars = perf_vars[start:end]
+                coeffs = flatten_weights[start:end]
+                yield SumFactor(team_perf_var, child_perf_vars, coeffs)
+
+        def build_team_diff_layer():
+            for team, team_diff_var in enumerate(team_diff_vars):
+                yield SumFactor(team_diff_var,
+                                team_perf_vars[team:team + 2], [+1, -1])
+
+        def build_trunc_layer():
+            for x, team_diff_var in enumerate(team_diff_vars):
+                if callable(self.draw_probability):
+                    # dynamic draw probability
+                    team_perf1, team_perf2 = team_perf_vars[x:x + 2]
+                    args = (Rating(team_perf1), Rating(team_perf2), self)
+                    draw_probability = self.draw_probability(*args)
+                else:
+                    # static draw probability
+                    draw_probability = self.draw_probability
+                size = sum(map(len, rating_groups[x:x + 2]))
+                draw_margin = calc_draw_margin(draw_probability, size, self)
+                if ranks[x] == ranks[x + 1]:  # is a tie?
+                    v_func, w_func = self.v_draw, self.w_draw
+                else:
+                    v_func, w_func = self.v_win, self.w_win
+                yield TruncateFactor(team_diff_var,
+                                     v_func, w_func, draw_margin)
+
+        # layer builders for effort estimator
+        def build_effort_rating_layer():
+            for effort_rating_var, effort_rating in zip(effort_rating_vars, effort_flatten_ratings):
+                yield PriorFactor(effort_rating_var, effort_rating, self.tau)
+
+        def build_effort_perf_layer():
+            for effort_rating_var, effort_perf_var in zip(effort_rating_vars, effort_perf_vars):
+                yield LikelihoodFactor(effort_rating_var, effort_perf_var, self.beta ** 2)
+
+        def build_effort_team_perf_layer():
+            for team, effort_team_perf_var in enumerate(effort_team_perf_vars):
+                if team > 0:
+                    start = team_sizes[team - 1]
+                else:
+                    start = 0
+                end = team_sizes[team]
+                effort_child_perf_vars = effort_perf_vars[start:end]
+                coeffs = flatten_weights[start:end]
+                yield SumFactor(effort_team_perf_var, effort_child_perf_vars, coeffs)
+
+        def build_effort_trunc_layer():
+            for x, effort_team_diff_var in enumerate(effort_team_diff_vars):
+                if callable(self.draw_probability):
+                    # dynamic draw probability
+                    team_perf1, team_perf2 = team_perf_vars[x:x + 2]
+                    args = (Rating(team_perf1), Rating(team_perf2), self)
+                    draw_probability = self.draw_probability(*args)
+                else:
+                    # static draw probability
+                    draw_probability = self.draw_probability
+                size = sum(map(len, rating_groups[x:x + 2]))
+                draw_margin = calc_draw_margin(draw_probability, size, self)
+                if effort_ranks[x] == effort_ranks[x + 1]:  # is a tie?
+                    v_func, w_func = self.v_draw, self.w_draw
+                else:
+                    v_func, w_func = self.v_win, self.w_win
+                yield TruncateFactor(effort_team_diff_var,
+                                     v_func, w_func, draw_margin)
+
+        # build layers
+        return (build_rating_layer, build_perf_layer, build_team_perf_layer,
+                build_team_diff_layer, build_trunc_layer)
+
+    def run_extension_schedule(self, build_rating_layer, build_perf_layer,
+                     build_team_perf_layer, build_team_diff_layer,
+                     build_trunc_layer, min_delta=DELTA):
+        """Sends messages within every nodes of the factor graph until the
+        result is reliable.
+        """
+        if min_delta <= 0:
+            raise ValueError('min_delta must be greater than 0')
+        layers = []
+
+        def build(builders):
+            """Instantiate layers by using '()' the elements of builders."""
+            layers_built = [list(build()) for build in builders]
+            layers.extend(layers_built)
+            return layers_built
+
+        # gray arrows
+        layers_built = build([build_rating_layer,
+                              build_perf_layer,
+                              build_team_perf_layer])
+        rating_layer, perf_layer, team_perf_layer = layers_built
+
+        for f in chain(*layers_built):
+            f.down()
+
+        # arrow #1, #2, #3
+        team_diff_layer, trunc_layer = build([build_team_diff_layer, build_trunc_layer])
+        team_diff_len = len(team_diff_layer)
+        for x in range(10):
+            #print "x: {}".format(x)
             if team_diff_len == 1:
                 # only two teams
                 team_diff_layer[0].down()
@@ -509,6 +700,7 @@ class TrueSkill(object):
                          key=by_rank)
 
         #print "Sorting_rating_groups: {}".format(sorting)
+
         sorted_rating_groups, sorted_ranks, sorted_weights = [], [], []
         for x, (g, r, w) in sorting:
             sorted_rating_groups.append(g)
@@ -522,6 +714,104 @@ class TrueSkill(object):
 
         args = builders + (min_delta,)
         layers = self.run_schedule(*args)
+
+        print "Layers: {}".format(layers)
+
+        # make result
+        rating_layer, team_sizes = layers[0], _team_sizes(sorted_rating_groups)
+        transformed_groups = []
+        for start, end in zip([0] + team_sizes[:-1], team_sizes):
+            group = []
+            for f in rating_layer[start:end]:
+                group.append(Rating(float(f.var.mu), float(f.var.sigma)))
+            transformed_groups.append(tuple(group))
+        by_hint = lambda x: x[0]
+        unsorting = sorted(zip((x for x, __ in sorting), transformed_groups),
+                           key=by_hint)
+        if keys is None:
+            return [g for x, g in unsorting]
+        # restore the structure with input dictionary keys
+        return [dict(zip(keys[x], g)) for x, g in unsorting]
+
+    def rate_extension(self, rating_groups, ranks=None, weights=None, min_delta=DELTA):
+        """Recalculates ratings by the ranking table::
+
+           env = TrueSkill()  # uses default settings
+           # create ratings
+           r1 = env.create_rating(42.222)
+           r2 = env.create_rating(89.999)
+           # calculate new ratings
+           rating_groups = [(r1,), (r2,)]
+           rated_rating_groups = env.rate_extension(rating_groups, ranks=[0, 1])
+           # save new ratings
+           (r1,), (r2,) = rated_rating_groups
+
+        ``rating_groups`` is a list of rating tuples or dictionaries that
+        represents each team of the match.  You will get a result as same
+        structure as this argument.  Rating dictionaries for this may be useful
+        to choose specific player's new rating::
+
+           # load players from the database
+           p1 = load_player_from_database('Arpad Emrick Elo')
+           p2 = load_player_from_database('Mark Glickman')
+           p3 = load_player_from_database('Heungsub Lee')
+           # calculate new ratings
+           rating_groups = [{p1: p1.rating, p2: p2.rating}, {p3: p3.rating}]
+           rated_rating_groups = env.rate_extension(rating_groups, ranks=[0, 1])
+           # save new ratings
+           for player in [p1, p2, p3]:
+               player.rating = rated_rating_groups[player.team][player]
+
+        :param rating_groups: a list of tuples or dictionaries containing
+                              :class:`Rating` objects.
+        :param ranks: a ranking table.  By default, it is same as the order of
+                      the ``rating_groups``.
+        :param weights: weights of each players for "partial play".
+        :param min_delta: each loop checks a delta of changes and the loop
+                          will stop if the delta is less then this argument.
+        :returns: recalculated ratings same structure as ``rating_groups``.
+        :raises: :exc:`FloatingPointError` occurs when winners have too lower
+                 rating than losers.  higher floating-point precision couls
+                 solve this error.  set the backend to "mpmath".
+
+        .. versionadded:: 0.2
+
+        """
+        # Checks whether rating_groups is consistent (i.e., it should contain more than
+        # groups and all groups must not be empty.
+        rating_groups, keys = self.validate_rating_groups(rating_groups)
+        weights = self.validate_weights(weights, rating_groups, keys)           # [(1,),(1,)] if 1vs1
+
+        # Number of teams.
+        group_size = len(rating_groups)
+
+        if ranks is None:
+            ranks = range(group_size)
+        elif len(ranks) != group_size:
+            raise ValueError('Wrong ranks')
+
+        # sort rating groups by rank
+        by_rank = lambda x: x[1][1]
+        sorting = sorted(enumerate(zip(rating_groups, ranks, weights)),
+                         key=by_rank)
+
+        # print "Sorting_rating_groups: {}".format(sorting)
+
+        sorted_rating_groups, sorted_ranks, sorted_weights = [], [], []
+        for x, (g, r, w) in sorting:
+            sorted_rating_groups.append(g)
+            sorted_ranks.append(r)
+            # make weights to be greater than 0
+            sorted_weights.append(max(min_delta, w_) for w_ in w)
+
+        # build factor graph
+        args = (sorted_rating_groups, sorted_ranks, sorted_weights)
+        builders = self.factor_graph_builders(*args)
+
+        args = builders + (min_delta,)
+        layers = self.run_schedule(*args)
+
+        print "Layers: {}".format(layers)
 
         # make result
         rating_layer, team_sizes = layers[0], _team_sizes(sorted_rating_groups)
@@ -665,6 +955,36 @@ def rate_1vs1(rating1, rating2, drawn=False, min_delta=DELTA, env=None):
     ranks = [0, 0 if drawn else 1]
     teams = env.rate([(rating1,), (rating2,)], ranks, min_delta=min_delta)
     return teams[0][0], teams[1][0]
+
+
+def rate_extension_1vs1(rating1, rating2, drawn=False, min_delta=DELTA, env=None):
+    """A shortcut to rate just 2 players in a head-to-head match using effort
+        description::
+
+       alice, bob = Rating(25), Rating(30)
+       alice, bob = rate_extension_1vs1(alice, bob)
+       alice, bob = rate_extension_1vs1(alice, bob, drawn=True)
+
+    :param rating1: the winner's rating if they didn't draw.
+    :param rating2: the loser's rating if they didn't draw.
+    :param drawn: if the players drew, set this to ``True``.  Defaults to
+                  ``False``.
+    :param min_delta: will be passed to :meth:`rate`.
+    :param env: the :class:`TrueSkill` object.  Defaults to the global
+                environment.
+    :returns: a tuple containing recalculated 2 ratings.
+
+    .. versionadded:: 0.2
+
+    """
+    if env is None:
+        env = global_env()
+
+    # for ranks, a value of 1, means the player lost. This is because it represents an ascending order
+    # rank and as so, 0 comes first. See, section 2 of the TrueSkill paper.
+    ranks = [0, 0 if drawn else 1]
+    teams = env.rate([(rating1,), (rating2,)], ranks, min_delta=min_delta)
+    return teams[0][0], teams[1][0]     # each rating is on a team.
 
 
 def quality_1vs1(rating1, rating2, env=None):

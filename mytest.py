@@ -15,7 +15,7 @@ r2 = trueskill.Rating()  # 2P's skill
 # Then we can guess match quality which is equivalent with draw probability of
 # this match using quality_1vs1():
 
-print('{:.1%} chance to draw'.format(trueskill.quality_1vs1(r1, r2)))
+#print('{:.1%} chance to draw'.format(trueskill.quality_1vs1(r1, r2)))
 
 # After the game, TrueSkill recalculates their ratings by the game result.
 # For example, if 1P beat 2P:
@@ -32,9 +32,9 @@ print(new_r2)
 # shrank to 20.604. And both sigma values became narrow about same magnitude.
 
 # Of course, you can also handle a tie game with drawn=True:
-new_r1, new_r2 = trueskill.rate_1vs1(r1, r2, drawn=True)
-print(new_r1)
-print(new_r2)
+#new_r1, new_r2 = trueskill.rate_1vs1(r1, r2, drawn=True)
+#print(new_r1)
+#print(new_r2)
 
 
 # Demo of the TrueSkill model
@@ -119,3 +119,10 @@ def trueskill_demo():
     plt.show()
 
 #trueskill_demo()
+
+
+def graph_data():
+    domain = np.linspace(-40, 40, 200)
+    y = [norm.pdf(x, 0.000, 13.177) for x in domain]
+    plt.plot(domain, y)
+    plt.show()
