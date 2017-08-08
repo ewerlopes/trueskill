@@ -66,8 +66,10 @@ class Variable(Node, Gaussian):
     def update_value(self, factor, pi=0, tau=0, value=None):
         """
         Update variable parameters. This also updates the value of the
-        'message-from-factor' for the variable, which corresponds to 'Step 1'
-        (Compute marginal skills) and 'Step 2' (Compute skill to game messages).
+        given factor message (determined by the self parameter). This has
+        some correspondence with the 'Step 1' (Compute marginal skills) and
+        'Step 2' (Compute skill to game messages) in
+        http://mlg.eng.cam.ac.uk/teaching/4f13/1617/message%20in%20TrueSkill.pdf
 
         :param factor: a factor from which a variable send message to.
         :param pi: a precision to be incorporated.
@@ -76,8 +78,10 @@ class Variable(Node, Gaussian):
         :return: the numerical difference value from updating.
         """
         value = value or Gaussian(pi=pi, tau=tau)
-        old_message = self[factor]                      # get old value of variable 'message-from-factor'.
-        self[factor] = value * old_message / self       # update variable message from factor.
+        old_message = self[factor]                      # get old message value from factor.
+        # update message from factor
+        # NOTE: For the truncated factor, (value*old_message) is P(d). Vide eq. (6) in the TrueSkill paper.
+        self[factor] = value * old_message / self
         return self.set(value)                          # update gaussian value.
 
     def __getitem__(self, factor):
@@ -214,6 +218,21 @@ class SumFactor(Factor):
         return var.update_message(self, pi, tau)
 
 
+
+class LinkingFactor(Factor):
+    """
+    Implements the linking factor that joins skill difference variable and effort difference variable
+    """
+
+    def __init__(self):
+        pass
+
+    def left(self):
+        pass
+
+    def right(self):
+        pass
+
 class TruncateFactor(Factor):
     """
     Implements the comparison factor. Uses moment matching.
@@ -228,6 +247,7 @@ class TruncateFactor(Factor):
     def up(self):
         val = self.var                              # team_diff variable
         msg = self.var[self]                        # factor gaussian message
+        print "Msg: {}".format(msg)
         div = val / msg                             # this division gives you 'c' and 'd' in the TrueSkill paper.
         sqrt_pi = math.sqrt(div.pi)                 # sqrt(div.pi) = 1/sigma. This is sqrt(c) in the TrueSkill paper.
         args = (div.tau / sqrt_pi, self.draw_margin * sqrt_pi)  # args of Wf and Vf in the TrueSkill paper.
@@ -236,24 +256,3 @@ class TruncateFactor(Factor):
         denom = (1. - w)
         pi, tau = div.pi / denom, (div.tau + sqrt_pi * v) / denom
         return val.update_value(self, pi, tau)      # update the team_diff variable with new values of pi and tau.
-
-
-class PoissonTruncateFactor(Factor):
-
-    def __init__(self, var, v_func, w_func, draw_margin):
-        super(PoissonTruncateFactor, self).__init__([var])
-        self.v_func = v_func
-        self.w_func = w_func
-        self.draw_margin = draw_margin
-
-    def up(self):
-        val = self.var
-        msg = self.var[self]
-        div = val / msg
-        sqrt_pi = math.sqrt(div.pi)                                 # this is sigma
-        args = (div.tau / sqrt_pi, self.draw_margin * sqrt_pi)
-        v = self.v_func(*args)
-        w = self.w_func(*args)
-        denom = (1. - w)
-        pi, tau = div.pi / denom, (div.tau + sqrt_pi * v) / denom
-        return val.update_value(self, pi, tau)
