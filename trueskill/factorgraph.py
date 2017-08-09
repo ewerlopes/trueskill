@@ -219,20 +219,25 @@ class SumFactor(Factor):
         return var.update_message(self, pi, tau)
 
 
-
 class LinkingFactor(Factor):
     """
     Implements the linking factor that joins skill difference variable and effort difference variable
     """
 
-    def __init__(self):
-        pass
+    def __init__(self, diff_left, diff_right):
+        super(LikelihoodFactor, self).__init__([diff_left, diff_right])
+        self.diff_left = diff_left
+        self.diff_right = diff_right
 
     def left(self):
-        pass
+        msg = self.rating_var / self.rating_var[self]
+        #a = self.calc_a(msg)
+        #return self.perf_var.update_message(self, a * msg.pi, a * msg.tau)
+        return self.perf_var.update_message(self, msg.pi, msg.tau)
 
     def right(self):
-        pass
+        msg = self.rating_var / self.rating_var[self]
+        return self.perf_var.update_message(self, a * msg.pi, a * msg.tau)
 
 class TruncateFactor(Factor):
     """
@@ -248,7 +253,6 @@ class TruncateFactor(Factor):
     def up(self):
         val = self.var                              # team_diff variable
         msg = self.var[self]                        # factor gaussian message
-        #print "Msg: {}".format(msg)
         div = val / msg                             # this division gives you 'c' and 'd' in the TrueSkill paper.
         sqrt_pi = math.sqrt(div.pi)                 # sqrt(div.pi) = 1/sigma. This is sqrt(c) in the TrueSkill paper.
         args = (div.tau / sqrt_pi, self.draw_margin * sqrt_pi)  # args of Wf and Vf in the TrueSkill paper.

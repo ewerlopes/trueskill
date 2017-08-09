@@ -20,7 +20,7 @@ from six.moves import map, range, zip
 from .__about__ import __version__  # noqa
 from .backends import choose_backend
 from .factorgraph import (LikelihoodFactor, PriorFactor, SumFactor,
-                          TruncateFactor, Variable)
+                          TruncateFactor, LinkingFactor, Variable)
 from .mathematics import Gaussian, Matrix
 
 
@@ -556,6 +556,10 @@ class TrueSkill(object):
             for team, effort_team_diff_var in enumerate(effort_team_diff_vars):
                 yield SumFactor(effort_team_diff_var,
                                 effort_team_perf_vars[team:team + 2], [+1, -1])
+
+        def build_linking_layer():
+            for team, (team_diff_var, effort_team_diff_var) in enumerate(zip(team_diff_vars, effort_team_diff_vars)):
+                yield LinkingFactor(team_diff_var, effort_team_diff_var)
 
         def build_effort_trunc_layer():
             for x, effort_team_diff_var in enumerate(effort_team_diff_vars):
