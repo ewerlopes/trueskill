@@ -592,7 +592,9 @@ class TrueSkill(object):
         """
         if min_delta <= 0:
             raise ValueError('min_delta must be greater than 0')
+
         layers = []
+        effort_layers = []
 
         def build(builders):
             """Instantiate layers by using '()' the elements of builders."""
@@ -600,24 +602,40 @@ class TrueSkill(object):
             layers.extend(layers_built)
             return layers_built
 
-        # skill gray arrows
+        def build_effort(builders):
+            """Instantiate layers by using '()' the elements of builders."""
+            layers_built = [list(build()) for build in builders]
+            effort_layers.extend(layers_built)
+            return layers_built
+
+        # gray arrows
         layers_built = build([build_rating_layer,
                               build_perf_layer,
                               build_team_perf_layer])
-        rating_layer, perf_layer, team_perf_layer = layers_built
 
-        for f in chain(*layers_built):
+        effort_layers_built = build_effort([build_effort_rating_layer,
+                                            build_effort_perf_layer,
+                                            build_effort_team_perf_layer])
+
+        rating_layer, perf_layer, team_perf_layer = layers_built
+        effort_rating_layer, effort_perf_layer, effort_team_perf_layer = effort_layers_built
+
+        for f in chain(*(layers_built+effort_layers_built)):
             f.down()
 
         # arrow #1, #2, #3
         team_diff_layer, trunc_layer = build([build_team_diff_layer, build_trunc_layer])
-        # print "Diff_layer: {}".format(team_diff_layer[0])
+        effort_team_diff_layer, effort_trunc_layer = build_effort([build_effort_team_diff_layer, build_effort_trunc_layer])
+
         team_diff_len = len(team_diff_layer)
+
         for x in range(10):
             if team_diff_len == 1:
                 # only two teams
                 team_diff_layer[0].down()
                 delta = trunc_layer[0].up()
+                effort_team_diff_layer[0].down()
+                delta_effort = effort_trunc_layer[0].up()
             else:
                 # multiple teams
                 delta = 0
@@ -636,14 +654,20 @@ class TrueSkill(object):
         # up both ends
         team_diff_layer[0].up(0)
         team_diff_layer[team_diff_len - 1].up(1)
+        effort_team_diff_layer[0].up(0)
+        effort_team_diff_layer[team_diff_len - 1].up(1)
 
         # up the remainder of the black arrows
-        for f in team_perf_layer:
+        for f, f2 in zip(team_perf_layer, effort_team_perf_layer):
             for x in range(len(f.vars) - 1):
                 f.up(x)
-        for f in perf_layer:
+            for x in range(len(f2.vars) - 1):   # TODO: CAN THIS BE REWRITTEN IN THE SAME LOOP ABOVE?
+                f2.up(x)
+        for f, f2 in zip(perf_layer, effort_perf_layer):
             f.up()
-        return layers
+            f2.up()
+        
+        return layers, effort_layers
 
     def rate(self, rating_groups, ranks=None, weights=None, min_delta=DELTA):
         """Recalculates ratings by the ranking table::
@@ -725,7 +749,7 @@ class TrueSkill(object):
         args = builders + (min_delta,)
         layers = self.run_schedule(*args)
 
-        print "Layers: {}".format(layers)
+        print "Skill Layers: {}".format(layers)
 
         # make result
         rating_layer, team_sizes = layers[0], _team_sizes(sorted_rating_groups)
@@ -835,21 +859,30 @@ class TrueSkill(object):
         builders = self.factor_extension_graph_builders(*args)
 
         args = builders + (min_delta,)
-        layers = self.run_extension_schedule(*args)
+        layers, effort_layers = self.run_extension_schedule(*args)
 
-        print "Layers: {}".format(layers)
+        #print "Skill Layers: {}".format(layers)
+        #print "Effort Layers: {}".format(effort_layers)
 
         # make result
         rating_layer, team_sizes = layers[0], _team_sizes(sorted_rating_groups)
+        effort_rating_layer = effort_layers[0]
+
+        #print "Team sizes: {}".format(team_sizes)
         transformed_groups = []
         for start, end in zip([0] + team_sizes[:-1], team_sizes):
+            #print "start: {} and end: {}".format(start, end)
             group = []
-            for f in rating_layer[start:end]:
-                group.append(Rating(float(f.var.mu), float(f.var.sigma)))
+            for f, m in zip(rating_layer[start:end], effort_rating_layer[start:end]):
+                group.append((Rating(float(f.var.mu), float(f.var.sigma)),Rating(float(m.var.mu), float(m.var.sigma))))
             transformed_groups.append(tuple(group))
         by_hint = lambda x: x[0]
+        #print "T. groups: {}".format(transformed_groups)
         unsorting = sorted(zip((x for x, __ in sorting), transformed_groups),
                            key=by_hint)
+
+        #print "Unsorting: {}".format(unsorting)
+        #print "Keys: {}".format(keys)
         if keys is None:
             return [g for x, g in unsorting]
         # restore the structure with input dictionary keys
@@ -1011,7 +1044,7 @@ def rate_extension_1vs1(rating1, rating2, effort_rating1, effort_rating2, drawn=
     ranks = [0, 0 if drawn else 1]
     effort_ranks = [0, 0 if drawn else 1]
     teams = env.rate_extension([(rating1,), (rating2,)], [(effort_rating1,),(effort_rating2,)], ranks, effort_ranks, min_delta=min_delta)
-    return teams[0][0], teams[1][0]     # each rating is on a team.
+    return teams[0][0][0], teams[0][0][1], teams[1][0][0], teams[1][0][1]     # each rating is on a team. Second element is the effort estimation
 
 
 def quality_1vs1(rating1, rating2, env=None):

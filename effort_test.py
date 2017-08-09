@@ -22,9 +22,11 @@ e2 = trueskill.Rating()  # 2P's effort
 # After the game, TrueSkill recalculates their ratings by the game result.
 # For example, if 1P beat 2P:
 
-new_r1, new_r2 = trueskill.rate_extension_1vs1(r1, r2, e1, e2)
-print(new_r1)
-print(new_r2)
+new_r1, new_e1, new_r2, new_e2 = trueskill.rate_extension_1vs1(r1, r2, e1, e2)
+print("New Skill P1: {}".format(new_r1))
+print("New Skill E1: {}".format(new_e1))
+print("New Skill P2: {}".format(new_r2))
+print("New Skill E2: {}".format(new_e2))
 
 # Mu value follows player's win/draw/lose records. Higher value means higher
 # game skill. And sigma value follows the number of games. Lower value means

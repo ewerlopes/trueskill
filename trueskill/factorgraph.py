@@ -66,23 +66,24 @@ class Variable(Node, Gaussian):
     def update_value(self, factor, pi=0, tau=0, value=None):
         """
         Update variable parameters. This also updates the value of the
-        given factor message (determined by the self parameter). This has
-        some correspondence with the 'Step 1' (Compute marginal skills) and
-        'Step 2' (Compute skill to game messages) in
-        http://mlg.eng.cam.ac.uk/teaching/4f13/1617/message%20in%20TrueSkill.pdf
+        given factor message (determined by the self parameter).
 
-        :param factor: a factor from which a variable send message to.
+        :param factor: a factor that should have it's message updated.
         :param pi: a precision to be incorporated.
         :param tau: a precision adjusted mean to be incorporated.
         :param value: A gaussian.
         :return: the numerical difference value from updating.
         """
         value = value or Gaussian(pi=pi, tau=tau)
-        old_message = self[factor]                      # get old message value from factor.
-        # update message from factor
-        # NOTE: For the truncated factor, (value*old_message) is P(d). Vide eq. (6) in the TrueSkill paper.
-        self[factor] = value * old_message / self
-        return self.set(value)                          # update gaussian value.
+        old_message = self[factor]                      # 1
+        self[factor] = value * old_message / self       # 2
+        return self.set(value)                          # 3
+        #######
+        # NOTE: (For truncated factor) #1 gets the previous message factor-to-node (in this case, truncated-to-diff
+        # variable) and updates it in #2. The update is based on equation (6) of the TrueSkill paper, where <value *
+        # old_message> being the p_hat(di). The division by self is the denominator in equation (6), i.e, the previous
+        # diff variable value. The instruction #3 updates the value for the diff variable.
+        #######
 
     def __getitem__(self, factor):
         return self.messages[factor]
@@ -247,7 +248,7 @@ class TruncateFactor(Factor):
     def up(self):
         val = self.var                              # team_diff variable
         msg = self.var[self]                        # factor gaussian message
-        print "Msg: {}".format(msg)
+        #print "Msg: {}".format(msg)
         div = val / msg                             # this division gives you 'c' and 'd' in the TrueSkill paper.
         sqrt_pi = math.sqrt(div.pi)                 # sqrt(div.pi) = 1/sigma. This is sqrt(c) in the TrueSkill paper.
         args = (div.tau / sqrt_pi, self.draw_margin * sqrt_pi)  # args of Wf and Vf in the TrueSkill paper.
