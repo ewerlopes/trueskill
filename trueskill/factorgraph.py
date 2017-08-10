@@ -225,19 +225,20 @@ class LinkingFactor(Factor):
     """
 
     def __init__(self, diff_left, diff_right):
-        super(LikelihoodFactor, self).__init__([diff_left, diff_right])
+        super(LinkingFactor, self).__init__([diff_left, diff_right])
         self.diff_left = diff_left
         self.diff_right = diff_right
 
     def left(self):
-        msg = self.rating_var / self.rating_var[self]
-        #a = self.calc_a(msg)
-        #return self.perf_var.update_message(self, a * msg.pi, a * msg.tau)
-        return self.perf_var.update_message(self, msg.pi, msg.tau)
+        # update left_diff var.
+        msg = self.diff_right / self.diff_right[self]
+        return self.diff_left.update_message(self, msg.pi, msg.tau)
 
     def right(self):
-        msg = self.rating_var / self.rating_var[self]
-        return self.perf_var.update_message(self, a * msg.pi, a * msg.tau)
+        # update right_diff var.
+        msg = self.diff_left / self.diff_left[self]
+        return self.diff_right.update_message(self, msg.pi, msg.tau)
+
 
 class TruncateFactor(Factor):
     """

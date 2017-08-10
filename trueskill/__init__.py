@@ -584,13 +584,14 @@ class TrueSkill(object):
         return (build_rating_layer, build_perf_layer, build_team_perf_layer,
                 build_team_diff_layer, build_trunc_layer, build_effort_rating_layer,
                 build_effort_perf_layer, build_effort_team_perf_layer,
-                build_effort_team_diff_layer, build_effort_trunc_layer)
+                build_effort_team_diff_layer, build_effort_trunc_layer, build_linking_layer)
 
     def run_extension_schedule(self, build_rating_layer, build_perf_layer,
                                build_team_perf_layer, build_team_diff_layer,
                                build_trunc_layer, build_effort_rating_layer,
                                build_effort_perf_layer, build_effort_team_perf_layer,
-                               build_effort_team_diff_layer, build_effort_trunc_layer, min_delta=DELTA):
+                               build_effort_team_diff_layer, build_effort_trunc_layer, build_linking_layer,
+                               min_delta=DELTA):
         """Sends messages within every nodes of the factor graph until the
             result is reliable.
         """
@@ -628,18 +629,24 @@ class TrueSkill(object):
             f.down()
 
         # arrow #1, #2, #3
-        team_diff_layer, trunc_layer = build([build_team_diff_layer, build_trunc_layer])
-        effort_team_diff_layer, effort_trunc_layer = build_effort([build_effort_team_diff_layer, build_effort_trunc_layer])
+        team_diff_layer, trunc_layer, linking_layer = build([build_team_diff_layer,
+                                                             build_trunc_layer, build_linking_layer])
+        effort_team_diff_layer, effort_trunc_layer = build_effort([build_effort_team_diff_layer,
+                                                                   build_effort_trunc_layer])
 
         team_diff_len = len(team_diff_layer)
 
         for x in range(10):
+            print("#: {}".format(x))
             if team_diff_len == 1:
                 # only two teams
                 team_diff_layer[0].down()
-                delta = trunc_layer[0].up()
                 effort_team_diff_layer[0].down()
+                linking_layer[0].left()
+                delta = trunc_layer[0].up()
+                linking_layer[0].right()
                 delta_effort = effort_trunc_layer[0].up()
+                delta += delta_effort
             else:
                 # multiple teams
                 delta = 0
@@ -654,6 +661,8 @@ class TrueSkill(object):
             # repeat until to small update
             if delta <= min_delta:
                 break
+                
+            print("delta: {}".format(delta))
 
         # up both ends
         team_diff_layer[0].up(0)
