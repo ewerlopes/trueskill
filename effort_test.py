@@ -3,6 +3,9 @@ from matplotlib import pyplot as plt
 
 # Head-to-head (1 vs. 1) match rule
 
+r1s = []
+r2s = []
+
 # Most competition games follows 1:1 match rule. If your game does,
 # just use _1vs1 shortcuts containing rate_1vs1() and quality_1vs1().
 # These are very easy to use.
@@ -22,14 +25,18 @@ e2 = trueskill.Rating()  # 2P's effort
 # After the game, TrueSkill recalculates their ratings by the game result.
 # For example, if 1P beat 2P:
 
-
-for i in range(1):
-    r1, e1, r2, e2 = trueskill.rate_extension_1vs1(r1, r2, e1, e2)
-    print("New Skill P1: {}".format(r1))
-    print("New Skill E1: {}".format(e1))
-    print("New Skill P2: {}".format(r2))
-    print("New Skill E2: {}".format(e2))
-    print ""
+results = [0, 0, 0, 0, 0, 1, 1]
+# for i in results:
+#    if i:
+#        r2, e2, r1, e1 = trueskill.rate_extension_1vs1(r2, r1, e1, e2, [0, 0])
+#    else:
+#        r1, e1, r2, e2 = trueskill.rate_extension_1vs1(r1, r2, e1, e2, [0, 0])
+#
+#    r1s.append(r1)
+#    r2s.append(r2)
+#    print("New Skill P1: {}\tE1: {}".format(r1, e1))
+#    print("New Skill P2: {}\tE2: {}".format(r2, e2))
+#    print ""
 
 
 
@@ -41,6 +48,23 @@ for i in range(1):
 # shrank to 20.604. And both sigma values became narrow about same magnitude.
 
 # Of course, you can also handle a tie game with drawn=True:
-#new_r1, new_r2 = trueskill.rate_1vs1(r1, r2, drawn=True)
+for i in results:
+    if i:
+        r2, r1 = trueskill.rate_1vs1(r2, r1)#, drawn=True)
+    else:
+        r1, r2 = trueskill.rate_1vs1(r1, r2)
+
+    r1s.append(r1.mu)
+    r2s.append(r2.mu)
+
+    print("New Skill P1: {}\tE1: {}".format(r1, e1))
+    print("New Skill P2: {}\tE2: {}".format(r2, e2))
+    print ""
+
+plt.plot(r1s, label="r1")
+plt.plot(r2s, label="r2")
+plt.legend()
+plt.show()
+
 #print(new_r1)
 #print(new_r2)

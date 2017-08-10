@@ -1,7 +1,7 @@
 from scipy.special import iv
 import numpy as np
 
-def test1():
+def t1():
     class A:
 
         def __init__(self):
@@ -142,4 +142,4 @@ def version2Effort():
 
     plt.show()
 
-version2Effort()
+version1Efffort()

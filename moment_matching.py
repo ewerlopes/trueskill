@@ -44,7 +44,7 @@ def main():
 
     plt.figure(figsize=(6,4))
     plt.plot(domain, original_g, '-', label="original Gaussian", color='black', lw=0.5)
-    plt.plot(domain, truncated, '-', label="Truncated", color='black', lw=1)
+    plt.plot(domain, truncated, '-', label="Truncated", color='black', lw=2)
     plt.plot(domain, rectified, '-', label="rectified", color='blue', lw=1)
 
     mu = o_mu + y * np.sqrt(o_var) * phi((y*o_mu)/np.sqrt(o_var))

@@ -1,10 +1,16 @@
 from scipy.stats import norm, beta
+from trueskill.mathematics import Gaussian
 from matplotlib import pyplot as plt
 import numpy as np
 
-mu1 = 3
-mu2 = 5
-sigma = 1
+g1 = Gaussian(mu=5, sigma=1)
+g2 = Gaussian(mu=2, sigma=1)
+
+e1 = Gaussian(mu=3, sigma=1)
+e2 = Gaussian(mu=1, sigma=1)
+skill_diff = Gaussian(mu=g1.mu-g2.mu, sigma=np.sqrt(g1.sigma**2 + g2.sigma**2))
+e_diff = Gaussian(mu=e1.mu-e2.mu, sigma=np.sqrt(e1.sigma**2 + e2.sigma**2))
+skill_effort = skill_diff * e_diff
 
 domain = np.linspace(-10, 10, 200)
 y = [norm.pdf(x) for x in domain]
@@ -12,27 +18,20 @@ y = [norm.pdf(x) for x in domain]
 plt.figure(figsize=(12, 4))
 
 plt.subplot(131)
-plt.plot(domain, [norm.pdf(x, mu1, sigma) for x in domain], label="$P1$")
-plt.plot(domain, [norm.pdf(x, mu2, sigma) for x in domain], label="$P2$")
-plt.plot(domain, [norm.pdf(x, mu1-mu2, np.sqrt(sigma**2+sigma**2)) for x in domain], label="$\mu1 - \mu2$")
+plt.plot(domain, [norm.pdf(x, g1.mu, g1.sigma) for x in domain], label="$P1$")
+plt.plot(domain, [norm.pdf(x, g2.mu, g2.sigma) for x in domain], label="$P2$")
+plt.plot(domain, [norm.pdf(x, e1.mu, e1.sigma) for x in domain], label="$E1$")
+plt.plot(domain, [norm.pdf(x, e2.mu, e2.sigma) for x in domain], label="$E2$")
 plt.legend(loc="best", fontsize=8)
 
 plt.subplot(132)
-z = [x / np.sqrt(sigma ** 2 + sigma ** 2) for x in domain]
-plt.plot(z, [norm.pdf(x, mu1 - mu2, 1) for x in z], label="$N(x; w1-w2, 1)$")
-plt.plot(domain, y, label="$N(x;0,1)$")
-plt.plot(domain, [norm.cdf(x) for x in domain], label="$\Phi$")
+plt.plot(domain, [norm.pdf(x, e_diff.mu, e_diff.sigma) for x in domain], label="$effortdiff$")
+plt.plot(domain, [norm.pdf(x, skill_diff.mu, skill_diff.sigma) for x in domain], label="$skilldiff$")
+plt.plot(domain, [norm.pdf(x, skill_effort.mu, skill_effort.sigma) for x in domain], label="$skill + effort$")
 plt.legend(loc="best", fontsize=8)
 
-a = norm.cdf(mu1-mu2, 0, 1)
-b = 1-norm.cdf(0, mu1 - mu2, 1)
-print a
-print b
-
 plt.subplot(133)
-a = 0.6
-b = 0.5
-x = np.arange (-50, 50, 0.1)
-y = beta.pdf(x, a, b, scale=100, loc=-50)
-plt.plot(x, y)
+plt.plot(domain, [norm.cdf(x, skill_diff.mu, skill_diff.sigma) for x in domain], label="$skilldiff$")
+plt.plot(domain, [norm.cdf(x, skill_effort.mu, skill_effort.sigma) for x in domain], label="$skill + effort$")
+plt.legend(loc="best", fontsize=8)
 plt.show()

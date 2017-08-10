@@ -637,16 +637,20 @@ class TrueSkill(object):
         team_diff_len = len(team_diff_layer)
 
         for x in range(10):
+            if team_diff_len == 1:
+                effort_team_diff_layer[0].down()
+                delta_effort = effort_trunc_layer[0].up()
+            # repeat until to small update
+            if delta_effort <= min_delta:
+                break
+
+        for x in range(10):
             print("#: {}".format(x))
             if team_diff_len == 1:
                 # only two teams
                 team_diff_layer[0].down()
-                effort_team_diff_layer[0].down()
                 linking_layer[0].left()
                 delta = trunc_layer[0].up()
-                linking_layer[0].right()
-                delta_effort = effort_trunc_layer[0].up()
-                delta += delta_effort
             else:
                 # multiple teams
                 delta = 0
@@ -660,8 +664,8 @@ class TrueSkill(object):
                     team_diff_layer[x].up(0)  # up to left variable
             # repeat until to small update
             if delta <= min_delta:
+                print("delta on exit: {}".format(delta))
                 break
-                
             print("delta: {}".format(delta))
 
         # up both ends
@@ -854,6 +858,11 @@ class TrueSkill(object):
         # groups and all groups must not be empty.
         effort_rating_groups, keys = self.validate_rating_groups(effort_rating_groups)
 
+        if effort_ranks is None:
+            effort_ranks = range(group_size)
+        elif len(effort_ranks) != group_size:
+            raise ValueError('Wrong effort ranks')
+
         # sort effort rating groups by rank
         by_rank = lambda x: x[1][1]
         effort_sorting = sorted(enumerate(zip(effort_rating_groups, effort_ranks, weights)),
@@ -881,21 +890,16 @@ class TrueSkill(object):
         rating_layer, team_sizes = layers[0], _team_sizes(sorted_rating_groups)
         effort_rating_layer = effort_layers[0]
 
-        #print "Team sizes: {}".format(team_sizes)
         transformed_groups = []
         for start, end in zip([0] + team_sizes[:-1], team_sizes):
-            #print "start: {} and end: {}".format(start, end)
             group = []
             for f, m in zip(rating_layer[start:end], effort_rating_layer[start:end]):
                 group.append((Rating(float(f.var.mu), float(f.var.sigma)),Rating(float(m.var.mu), float(m.var.sigma))))
             transformed_groups.append(tuple(group))
         by_hint = lambda x: x[0]
-        #print "T. groups: {}".format(transformed_groups)
         unsorting = sorted(zip((x for x, __ in sorting), transformed_groups),
                            key=by_hint)
 
-        #print "Unsorting: {}".format(unsorting)
-        #print "Keys: {}".format(keys)
         if keys is None:
             return [g for x, g in unsorting]
         # restore the structure with input dictionary keys
@@ -1029,7 +1033,8 @@ def rate_1vs1(rating1, rating2, drawn=False, min_delta=DELTA, env=None):
     return teams[0][0], teams[1][0]
 
 
-def rate_extension_1vs1(rating1, rating2, effort_rating1, effort_rating2, drawn=False, min_delta=DELTA, env=None):
+def rate_extension_1vs1(rating1, rating2, effort_rating1, effort_rating2, effort_ranks=[0,1],
+                        drawn=False, min_delta=DELTA, env=None):
     """A shortcut to rate just 2 players in a head-to-head match using effort
         description::
 
@@ -1055,8 +1060,7 @@ def rate_extension_1vs1(rating1, rating2, effort_rating1, effort_rating2, drawn=
     # for ranks, a value of 1, means the player lost. This is because it represents an ascending order
     # rank and as so, 0 comes first. See, section 2 of the TrueSkill paper.
     ranks = [0, 0 if drawn else 1]
-    effort_ranks = [0, 0 if drawn else 1]
-    teams = env.rate_extension([(rating1,), (rating2,)], [(effort_rating1,),(effort_rating2,)], ranks, effort_ranks, min_delta=min_delta)
+    teams = env.rate_extension([(rating1,), (rating2,)], [(effort_rating1,), (effort_rating2,)], ranks, effort_ranks, min_delta=min_delta)
     return teams[0][0][0], teams[0][0][1], teams[1][0][0], teams[1][0][1]     # each rating is on a team. Second element is the effort estimation
 
 
