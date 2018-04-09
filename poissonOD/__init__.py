@@ -12,6 +12,7 @@ from trueskill.factorgraph import (LikelihoodFactor, PriorFactor,
                                    SumFactor, Variable)
 from .factorgraph import TruncateFactorVariational
 from trueskill.mathematics import Gaussian, Matrix
+import math
 
 __all__ = [
     # PoissonOD objects
@@ -419,6 +420,61 @@ class PoissonOD:
             return [g for x, g in unsorting]
         # restore the structure with input dictionary keys
         return [dict(zip(keys[x], g)) for x, g in unsorting]
+
+    def quality(self, rating_groups, weights=None):
+        """Calculates the match quality of the given rating groups.  A result
+        is the draw probability in the association::
+
+          env = TrueSkill()
+          if env.quality([team1, team2, team3]) < 0.50:
+              print('This match seems to be not so fair')
+
+        :param rating_groups: a list of tuples or dictionaries containing
+                              :class:`Rating` objects.
+        :param weights: weights of each players for "partial play".
+
+        .. versionadded:: 0.2
+
+        """
+        rating_groups, keys = self.validate_rating_groups(rating_groups)
+        weights = self.validate_weights(weights, rating_groups, keys)
+        flatten_ratings = sum(map(tuple, rating_groups), ())
+        flatten_weights = sum(map(tuple, weights), ())
+        length = len(flatten_ratings)
+        # a vector of all of the skill means
+        mean_matrix = Matrix([[r.mu] for r in flatten_ratings])
+        # a matrix whose diagonal values are the variances (sigma ** 2) of each
+        # of the players.
+        def variance_matrix(height, width):
+            variances = (r.sigma ** 2 for r in flatten_ratings)
+            for x, variance in enumerate(variances):
+                yield (x, x), variance
+        variance_matrix = Matrix(variance_matrix, length, length)
+        # the player-team assignment and comparison matrix
+        def rotated_a_matrix(set_height, set_width):
+            t = 0
+            for r, (cur, next) in enumerate(zip(rating_groups[:-1],
+                                                rating_groups[1:])):
+                for x in range(t, t + len(cur)):
+                    yield (r, x), flatten_weights[x]
+                    t += 1
+                x += 1
+                for x in range(x, x + len(next)):
+                    yield (r, x), -flatten_weights[x]
+            set_height(r + 1)
+            set_width(x + 1)
+        rotated_a_matrix = Matrix(rotated_a_matrix)
+        a_matrix = rotated_a_matrix.transpose()
+        # match quality further derivation
+        _ata = (self.beta ** 2) * rotated_a_matrix * a_matrix
+        _atsa = rotated_a_matrix * variance_matrix * a_matrix
+        start = mean_matrix.transpose() * a_matrix
+        middle = _ata + _atsa
+        end = rotated_a_matrix * mean_matrix
+        # make result
+        e_arg = (-0.5 * start * middle.inverse() * end).determinant()
+        s_arg = _ata.determinant() / middle.determinant()
+        return math.exp(e_arg) * math.sqrt(s_arg)
 
 
 def rate_1vs1(rating1, rating2, score, drawn=False, min_delta=DELTA, env=None):

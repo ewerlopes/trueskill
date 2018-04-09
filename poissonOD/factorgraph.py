@@ -47,7 +47,7 @@ class TruncateFactorVariational(Factor):
         # the 'precision adjusted mean', which is defined as mu/sigma^2. Naturally, the variance
         # is the inverse of div.pi and the mean is div.tau*variance.
 
-        sig = (1.0/div.pi)     # variance
+        sig = (1.0/div.pi)   # variance
         mu = div.tau * sig   # mean
         for i in range(5):
             numerator = mu + (self.score*sig) - 1 - self.k + math.sqrt((self.k - mu - (self.score*sig) - 1)**2 + 2*sig)

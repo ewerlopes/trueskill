@@ -3,6 +3,7 @@
   <component name="ProjectModuleManager">
     <modules>
       <module fileurl="file://$PROJECT_DIR$/.idea/score-based.iml" filepath="$PROJECT_DIR$/.idea/score-based.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/score_based_skill_learning.iml" filepath="$PROJECT_DIR$/.idea/score_based_skill_learning.iml" />
     </modules>
   </component>
 </project>
